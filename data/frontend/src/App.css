@@ -1,0 +1,95 @@
+:root {
+  font-family: Arial, sans-serif;
+  background: #f3f4f6;
+  color: #1f2937;
+}
+
+body {
+  margin: 0;
+}
+
+button {
+  padding: 10px 18px;
+  border: 1px solid #9ca3af;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.app {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 40px 24px;
+}
+
+.panel {
+  display: flex;
+  gap: 12px;
+  padding: 24px;
+  background: white;
+  border-radius: 10px;
+}
+.panel {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 20px;
+  background: white;
+  border-radius: 10px;
+}
+
+.fileButton,
+button {
+  padding: 10px 18px;
+  border: 1px solid #9ca3af;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.previewPanel {
+  margin-top: 24px;
+  padding: 20px;
+  background: white;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.previewImage {
+  max-width: 100%;
+  max-height: 550px;
+  object-fit: contain;
+}
+
+.imageInfo {
+  margin-top: 16px;
+  padding: 16px;
+  background: white;
+  border-radius: 10px;
+}
+.imageWrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.detectedBox {
+  position: absolute;
+  border: 3px solid red;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.cropBox {
+  position: absolute;
+  border: 3px dashed limegreen;
+  box-sizing: border-box;
+  pointer-events: none;
+}
