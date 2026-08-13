@@ -143,23 +143,41 @@ def crop_image_endpoint(file_id: str) -> dict:
 
         cropped = oriented_image[
             y1:y2,
-            x1:x2,
+            x1:x2
         ]
+
+        original_name = image_path.name
 
         output_dir = (
             Path(__file__).resolve().parents[1]
             / "data"
             / "output"
+            / file_id
         )
 
-        output_path = (
+        output_dir.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        original_output_path = (
             output_dir
-            / f"{file_id}{image_path.suffix}"
+            / f"original_{original_name}"
+        )
+
+        new_output_path = (
+            output_dir
+            / f"new_{original_name}"
+        )
+
+        save_image(
+            image,
+            str(original_output_path),
         )
 
         save_image(
             cropped,
-            str(output_path),
+            str(new_output_path),
         )
 
         return {
@@ -181,8 +199,6 @@ def crop_image_endpoint(file_id: str) -> dict:
             status_code=422,
             detail=str(exc),
         ) from exc
-
-
 @app.post("/api/images/{file_id}/rotate/{angle}")
 def rotate_result(file_id: str, angle: int) -> dict:
     if angle not in (90, 270):
@@ -195,10 +211,11 @@ def rotate_result(file_id: str, angle: int) -> dict:
         Path(__file__).resolve().parents[1]
         / "data"
         / "output"
+        / file_id
     )
 
     matches = list(
-        output_dir.glob(f"{file_id}.*")
+        output_dir.glob("new_*")
     )
 
     if not matches:
@@ -209,8 +226,14 @@ def rotate_result(file_id: str, angle: int) -> dict:
 
     output_path = matches[0]
 
-    image = read_image(str(output_path))
-    rotated = rotate_image(image, angle)
+    image = read_image(
+        str(output_path)
+    )
+
+    rotated = rotate_image(
+        image,
+        angle,
+    )
 
     save_image(
         rotated,
@@ -230,10 +253,11 @@ def get_crop_result(file_id: str):
         Path(__file__).resolve().parents[1]
         / "data"
         / "output"
+        / file_id
     )
 
     matches = list(
-        output_dir.glob(f"{file_id}.*")
+        output_dir.glob("new_*")
     )
 
     if not matches:
@@ -242,4 +266,6 @@ def get_crop_result(file_id: str):
             detail="Cropped image not found",
         )
 
-    return FileResponse(matches[0])
+    return FileResponse(
+        matches[0]
+    )
