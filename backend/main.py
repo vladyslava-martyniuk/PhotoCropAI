@@ -1,21 +1,28 @@
 from io import BytesIO
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from PIL import Image, UnidentifiedImageError
 
-from PhotoCropAI.backend.services.working_copy_service import (
+from services.working_copy_service import (
     create_working_copy,
     get_working_path,
 )
 
-from PhotoCropAI.backend.services.auto_crop_service import (
+from services.auto_crop_service import (
     detect_object,
+    detect_object_from_image,
     calculate_crop_box,
-    crop_image,
+    save_image,
+    read_image,
 )
-from fastapi.responses import FileResponse
-from pathlib import Path
+
+from services.orientation_service import (
+    choose_best_orientation,
+    rotate_image,
+)
 
 
 app = FastAPI(
@@ -85,7 +92,6 @@ async def upload_image(file: UploadFile) -> dict:
 
 
 @app.post("/api/images/{file_id}/detect")
-
 def detect_image_object(file_id: str) -> dict:
     try:
         image_path = get_working_path(file_id)
@@ -112,24 +118,54 @@ def detect_image_object(file_id: str) -> dict:
 
 
 @app.post("/api/images/{file_id}/crop")
-def crop_image_endpoint(file_id: str):
+def crop_image_endpoint(file_id: str) -> dict:
     try:
         image_path = get_working_path(file_id)
 
-        detection = detect_object(str(image_path))
-        crop_box = calculate_crop_box(detection)
+        image = read_image(str(image_path))
 
-        output_dir = Path(__file__).resolve().parents[1] / "data" / "output"
-        output_path = output_dir / f"{file_id}{image_path.suffix}"
+        oriented_image, rotation_angle = choose_best_orientation(
+            image
+        )
 
-        crop_image(
-            str(image_path),
-            crop_box,
+        detection = detect_object_from_image(
+            oriented_image
+        )
+
+        crop_box = calculate_crop_box(
+            detection
+        )
+
+        x1 = crop_box["x1"]
+        y1 = crop_box["y1"]
+        x2 = crop_box["x2"]
+        y2 = crop_box["y2"]
+
+        cropped = oriented_image[
+            y1:y2,
+            x1:x2,
+        ]
+
+        output_dir = (
+            Path(__file__).resolve().parents[1]
+            / "data"
+            / "output"
+        )
+
+        output_path = (
+            output_dir
+            / f"{file_id}{image_path.suffix}"
+        )
+
+        save_image(
+            cropped,
             str(output_path),
         )
 
         return {
             "id": file_id,
+            "rotation_angle": rotation_angle,
+            "detection": detection,
             "crop": crop_box,
             "preview_url": f"/api/images/{file_id}/result",
         }
@@ -147,16 +183,63 @@ def crop_image_endpoint(file_id: str):
         ) from exc
 
 
-@app.get("/api/images/{file_id}/result")
-def get_crop_result(file_id: str):
-    output_dir = Path(__file__).resolve().parents[1] / "data" / "output"
+@app.post("/api/images/{file_id}/rotate/{angle}")
+def rotate_result(file_id: str, angle: int) -> dict:
+    if angle not in (90, 270):
+        raise HTTPException(
+            status_code=400,
+            detail="Angle must be 90 or 270",
+        )
 
-    matches = list(output_dir.glob(f"{file_id}.*"))
+    output_dir = (
+        Path(__file__).resolve().parents[1]
+        / "data"
+        / "output"
+    )
+
+    matches = list(
+        output_dir.glob(f"{file_id}.*")
+    )
 
     if not matches:
         raise HTTPException(
             status_code=404,
-            detail="Обрізане зображення не знайдено",
+            detail="Cropped image not found",
+        )
+
+    output_path = matches[0]
+
+    image = read_image(str(output_path))
+    rotated = rotate_image(image, angle)
+
+    save_image(
+        rotated,
+        str(output_path),
+    )
+
+    return {
+        "id": file_id,
+        "rotation_angle": angle,
+        "preview_url": f"/api/images/{file_id}/result",
+    }
+
+
+@app.get("/api/images/{file_id}/result")
+def get_crop_result(file_id: str):
+    output_dir = (
+        Path(__file__).resolve().parents[1]
+        / "data"
+        / "output"
+    )
+
+    matches = list(
+        output_dir.glob(f"{file_id}.*")
+    )
+
+    if not matches:
+        raise HTTPException(
+            status_code=404,
+            detail="Cropped image not found",
         )
 
     return FileResponse(matches[0])

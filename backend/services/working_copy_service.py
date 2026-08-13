@@ -10,21 +10,61 @@ def create_working_copy(
     content: bytes,
     original_filename: str,
 ) -> tuple[str, Path]:
-    WORKING_DIR.mkdir(parents=True, exist_ok=True)
+    WORKING_DIR.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
 
     file_id = str(uuid4())
-    suffix = Path(original_filename).suffix.lower()
 
-    working_path = WORKING_DIR / f"{file_id}{suffix}"
-    working_path.write_bytes(content)
+    original_name = Path(
+        original_filename
+    ).name
+
+    working_dir = (
+        WORKING_DIR
+        / file_id
+    )
+
+    working_dir.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    working_path = (
+        working_dir
+        / original_name
+    )
+
+    working_path.write_bytes(
+        content
+    )
 
     return file_id, working_path
 
 
-def get_working_path(file_id: str) -> Path:
-    matches = list(WORKING_DIR.glob(f"{file_id}.*"))
+def get_working_path(
+    file_id: str,
+) -> Path:
+    working_dir = (
+        WORKING_DIR
+        / file_id
+    )
 
-    if not matches:
-        raise FileNotFoundError("Робочу копію не знайдено")
+    if not working_dir.exists():
+        raise FileNotFoundError(
+            "Working directory not found"
+        )
 
-    return matches[0]
+    files = [
+        path
+        for path in working_dir.iterdir()
+        if path.is_file()
+    ]
+
+    if not files:
+        raise FileNotFoundError(
+            "Working copy not found"
+        )
+
+    return files[0]

@@ -1,14 +1,20 @@
+from pathlib import Path
+
 import cv2
 import numpy as np
 
 
-def detect_object(image_path: str) -> dict:
+def read_image(image_path: str):
     image_bytes = np.fromfile(image_path, dtype=np.uint8)
     image = cv2.imdecode(image_bytes, cv2.IMREAD_COLOR)
 
     if image is None:
-        raise ValueError("Не вдалося прочитати зображення")
+        raise ValueError("Cannot read image")
 
+    return image
+
+
+def detect_object_from_image(image) -> dict:
     height, width = image.shape[:2]
 
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -32,7 +38,7 @@ def detect_object(image_path: str) -> dict:
     )
 
     if not contours:
-        raise ValueError("Об'єкт не знайдено")
+        raise ValueError("Object not found")
 
     min_area = width * height * 0.01
 
@@ -43,9 +49,12 @@ def detect_object(image_path: str) -> dict:
     ]
 
     if not valid_contours:
-        raise ValueError("Об'єкт не знайдено")
+        raise ValueError("Object not found")
 
-    largest = max(valid_contours, key=cv2.contourArea)
+    largest = max(
+        valid_contours,
+        key=cv2.contourArea,
+    )
 
     x, y, w, h = cv2.boundingRect(largest)
 
@@ -57,9 +66,17 @@ def detect_object(image_path: str) -> dict:
         "image_width": width,
         "image_height": height,
     }
+
+
+def detect_object(image_path: str) -> dict:
+    image = read_image(image_path)
+
+    return detect_object_from_image(image)
+
+
 def calculate_crop_box(
     detection: dict,
-    margin_ratio: float = 0.10,
+    margin_ratio: float = 0.04,
 ) -> dict:
     x = detection["x"]
     y = detection["y"]
@@ -93,7 +110,28 @@ def calculate_crop_box(
         "width": right - left,
         "height": bottom - top,
     }
-from pathlib import Path
+
+
+def save_image(
+    image,
+    output_path: str,
+) -> str:
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    extension = output.suffix or ".jpg"
+
+    success, encoded = cv2.imencode(
+        extension,
+        image,
+    )
+
+    if not success:
+        raise ValueError("Cannot save image")
+
+    encoded.tofile(str(output))
+
+    return str(output)
 
 
 def crop_image(
@@ -101,11 +139,7 @@ def crop_image(
     crop_box: dict,
     output_path: str,
 ) -> str:
-    image_bytes = np.fromfile(image_path, dtype=np.uint8)
-    image = cv2.imdecode(image_bytes, cv2.IMREAD_COLOR)
-
-    if image is None:
-        raise ValueError("Не вдалося прочитати зображення")
+    image = read_image(image_path)
 
     x1 = crop_box["x1"]
     y1 = crop_box["y1"]
@@ -114,16 +148,7 @@ def crop_image(
 
     cropped = image[y1:y2, x1:x2]
 
-    output = Path(output_path)
-    output.parent.mkdir(parents=True, exist_ok=True)
-
-    extension = output.suffix or ".jpg"
-
-    success, encoded = cv2.imencode(extension, cropped)
-
-    if not success:
-        raise ValueError("Не вдалося зберегти обрізане зображення")
-
-    encoded.tofile(str(output))
-
-    return str(output)
+    return save_image(
+        cropped,
+        output_path,
+    )
