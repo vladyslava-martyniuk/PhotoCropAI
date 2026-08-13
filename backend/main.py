@@ -96,8 +96,13 @@ def detect_image_object(file_id: str) -> dict:
     try:
         image_path = get_working_path(file_id)
 
-        detection = detect_object(str(image_path))
-        crop = calculate_crop_box(detection)
+        detection = detect_object(
+            str(image_path)
+        )
+
+        crop = calculate_crop_box(
+            detection
+        )
 
         return {
             "detection": detection,
@@ -122,10 +127,12 @@ def crop_image_endpoint(file_id: str) -> dict:
     try:
         image_path = get_working_path(file_id)
 
-        image = read_image(str(image_path))
+        image = read_image(
+            str(image_path)
+        )
 
-        oriented_image, rotation_angle = choose_best_orientation(
-            image
+        oriented_image, rotation_angle = (
+            choose_best_orientation(image)
         )
 
         detection = detect_object_from_image(
@@ -143,16 +150,17 @@ def crop_image_endpoint(file_id: str) -> dict:
 
         cropped = oriented_image[
             y1:y2,
-            x1:x2
+            x1:x2,
         ]
 
         original_name = image_path.name
+        folder_name = image_path.stem
 
         output_dir = (
             Path(__file__).resolve().parents[1]
             / "data"
             / "output"
-            / file_id
+            / folder_name
         )
 
         output_dir.mkdir(
@@ -182,10 +190,13 @@ def crop_image_endpoint(file_id: str) -> dict:
 
         return {
             "id": file_id,
+            "filename": original_name,
+            "folder_name": folder_name,
             "rotation_angle": rotation_angle,
             "detection": detection,
             "crop": crop_box,
-            "preview_url": f"/api/images/{file_id}/result",
+            "preview_url":
+                f"/api/images/{file_id}/result",
         }
 
     except FileNotFoundError as exc:
@@ -199,73 +210,101 @@ def crop_image_endpoint(file_id: str) -> dict:
             status_code=422,
             detail=str(exc),
         ) from exc
+
+
 @app.post("/api/images/{file_id}/rotate/{angle}")
-def rotate_result(file_id: str, angle: int) -> dict:
+def rotate_result(
+    file_id: str,
+    angle: int,
+) -> dict:
     if angle not in (90, 270):
         raise HTTPException(
             status_code=400,
             detail="Angle must be 90 or 270",
         )
 
-    output_dir = (
-        Path(__file__).resolve().parents[1]
-        / "data"
-        / "output"
-        / file_id
-    )
+    try:
+        image_path = get_working_path(file_id)
 
-    matches = list(
-        output_dir.glob("new_*")
-    )
+        folder_name = image_path.stem
 
-    if not matches:
-        raise HTTPException(
-            status_code=404,
-            detail="Cropped image not found",
+        output_dir = (
+            Path(__file__).resolve().parents[1]
+            / "data"
+            / "output"
+            / folder_name
         )
 
-    output_path = matches[0]
+        matches = list(
+            output_dir.glob("new_*")
+        )
 
-    image = read_image(
-        str(output_path)
-    )
+        if not matches:
+            raise HTTPException(
+                status_code=404,
+                detail="Cropped image not found",
+            )
 
-    rotated = rotate_image(
-        image,
-        angle,
-    )
+        output_path = matches[0]
 
-    save_image(
-        rotated,
-        str(output_path),
-    )
+        image = read_image(
+            str(output_path)
+        )
 
-    return {
-        "id": file_id,
-        "rotation_angle": angle,
-        "preview_url": f"/api/images/{file_id}/result",
-    }
+        rotated = rotate_image(
+            image,
+            angle,
+        )
+
+        save_image(
+            rotated,
+            str(output_path),
+        )
+
+        return {
+            "id": file_id,
+            "rotation_angle": angle,
+            "preview_url":
+                f"/api/images/{file_id}/result",
+        }
+
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
 
 
 @app.get("/api/images/{file_id}/result")
 def get_crop_result(file_id: str):
-    output_dir = (
-        Path(__file__).resolve().parents[1]
-        / "data"
-        / "output"
-        / file_id
-    )
+    try:
+        image_path = get_working_path(file_id)
 
-    matches = list(
-        output_dir.glob("new_*")
-    )
+        folder_name = image_path.stem
 
-    if not matches:
-        raise HTTPException(
-            status_code=404,
-            detail="Cropped image not found",
+        output_dir = (
+            Path(__file__).resolve().parents[1]
+            / "data"
+            / "output"
+            / folder_name
         )
 
-    return FileResponse(
-        matches[0]
-    )
+        matches = list(
+            output_dir.glob("new_*")
+        )
+
+        if not matches:
+            raise HTTPException(
+                status_code=404,
+                detail="Cropped image not found",
+            )
+
+        return FileResponse(
+            matches[0]
+        )
+
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc

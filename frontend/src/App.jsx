@@ -32,18 +32,24 @@ function App() {
   }, [items]);
 
   function handleFileChange(event) {
-    const files = Array.from(
-      event.target.files || []
-    ).slice(0, 20);
+    const newFiles = Array.from(event.target.files || []);
 
-    items.forEach((item) => {
-      if (item.previewUrl) {
-        URL.revokeObjectURL(item.previewUrl);
-      }
-    });
+    if (newFiles.length === 0) {
+      return;
+    }
 
-    const newItems = files.map((file, index) => ({
-      localId: `${Date.now()}-${index}`,
+    const remainingSlots = 20 - selectedFiles.length;
+
+    if (remainingSlots <= 0) {
+      setUploadStatus("Maximum 20 images");
+      event.target.value = "";
+      return;
+    }
+
+    const filesToAdd = newFiles.slice(0, remainingSlots);
+
+    const newItems = filesToAdd.map((file, index) => ({
+      localId: `${Date.now()}-${index}-${file.name}`,
       file,
       fileId: null,
       previewUrl: URL.createObjectURL(file),
@@ -54,9 +60,25 @@ function App() {
       error: "",
     }));
 
-    setSelectedFiles(files);
-    setItems(newItems);
-    setUploadStatus("");
+    setSelectedFiles((currentFiles) => [
+      ...currentFiles,
+      ...filesToAdd,
+    ]);
+
+    setItems((currentItems) => [
+      ...currentItems,
+      ...newItems,
+    ]);
+
+    if (newFiles.length > remainingSlots) {
+      setUploadStatus(
+        `Added ${filesToAdd.length} images. Maximum is 20.`
+      );
+    } else {
+      setUploadStatus("");
+    }
+
+    event.target.value = "";
   }
 
   function updateItem(localId, changes) {
@@ -148,21 +170,25 @@ function App() {
   }
 
   async function handleProcessAll() {
-    if (selectedFiles.length === 0) {
+    if (items.length === 0) {
       return;
     }
 
     setIsProcessing(true);
-    setUploadStatus(
-      `Processing 0 / ${selectedFiles.length}`
-    );
 
     let completed = 0;
+    let failed = 0;
+
+    setUploadStatus(
+      `Processing 0 / ${items.length}`
+    );
 
     for (const item of items) {
       try {
         await processSingleImage(item);
       } catch (error) {
+        failed += 1;
+
         updateItem(item.localId, {
           status: "Error",
           error: error.message,
@@ -172,13 +198,19 @@ function App() {
       completed += 1;
 
       setUploadStatus(
-        `Processing ${completed} / ${selectedFiles.length}`
+        `Processing ${completed} / ${items.length}`
       );
     }
 
-    setUploadStatus(
-      `Finished: ${completed} / ${selectedFiles.length}`
-    );
+    if (failed === 0) {
+      setUploadStatus(
+        `Finished: ${completed} / ${items.length}`
+      );
+    } else {
+      setUploadStatus(
+        `Finished: ${completed - failed} successful, ${failed} failed`
+      );
+    }
 
     setIsProcessing(false);
   }
@@ -223,6 +255,18 @@ function App() {
     }
   }
 
+  function handleClearAll() {
+    items.forEach((item) => {
+      if (item.previewUrl) {
+        URL.revokeObjectURL(item.previewUrl);
+      }
+    });
+
+    setSelectedFiles([]);
+    setItems([]);
+    setUploadStatus("");
+  }
+
   return (
     <main className="app">
       <h1>PhotoCropAI</h1>
@@ -246,7 +290,7 @@ function App() {
           type="button"
           onClick={handleProcessAll}
           disabled={
-            selectedFiles.length === 0 ||
+            items.length === 0 ||
             isProcessing
           }
         >
@@ -254,12 +298,22 @@ function App() {
             ? "Processing..."
             : "Process all"}
         </button>
+
+        <button
+          type="button"
+          onClick={handleClearAll}
+          disabled={
+            items.length === 0 ||
+            isProcessing
+          }
+        >
+          Clear all
+        </button>
       </section>
 
       {selectedFiles.length > 0 && (
         <p>
-          Selected: {selectedFiles.length} image
-          {selectedFiles.length !== 1 ? "s" : ""}
+          Selected: {selectedFiles.length} / 20 images
         </p>
       )}
 
@@ -360,7 +414,7 @@ function App() {
 
                   <img
                     src={item.croppedUrl}
-                    alt="Cropped result"
+                    alt={`Processed ${item.file.name}`}
                     className="previewImage"
                   />
 
@@ -387,7 +441,9 @@ function App() {
               )}
             </div>
 
-            <p>Status: {item.status}</p>
+            <p>
+              Status: {item.status}
+            </p>
 
             {item.error && (
               <p className="errorMessage">
