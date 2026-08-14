@@ -1,1 +1,1 @@
-# PhotoCropAI
+# PhotoCropAI is a simple tool fo cropping and editing photos quickly and easily.

@@ -5,7 +5,7 @@ import webbrowser
 
 import uvicorn
 
-from main import app
+from backend.main import app
 
 
 HOST = "127.0.0.1"
