@@ -1,17 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+
+# PyInstaller
+build/
+dist/
+dist_*/
+*.spec
+
+# Runtime images
+data/input/*
+!data/input/.gitkeep
+
 data/working/*
 !data/working/.gitkeep
 
 data/output/*
 !data/output/.gitkeep
-
-data/input/*
-!data/input/.gitkeep
-
-__pycache__/
-*.pyc
-
-node_modules/
-frontend/dist/
-
-.vscode/
-.env
