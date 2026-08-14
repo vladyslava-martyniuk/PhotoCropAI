@@ -1,9 +1,14 @@
 import sqlite3
-from pathlib import Path
+import sys
 from datetime import datetime
+from pathlib import Path
 
 
-BASE_DIR = Path(__file__).resolve().parents[2]
+if getattr(sys, "frozen", False):
+    BASE_DIR = Path(sys.executable).resolve().parent
+else:
+    BASE_DIR = Path(__file__).resolve().parents[2]
+
 
 DATABASE_DIR = BASE_DIR / "data"
 DATABASE_PATH = DATABASE_DIR / "photocropai.db"
@@ -111,19 +116,48 @@ def save_processing_result(
                 status,
                 rotation_angle,
 
-                detection.get("x") if detection else None,
-                detection.get("y") if detection else None,
-                detection.get("width") if detection else None,
-                detection.get("height") if detection else None,
+                detection.get("x")
+                if detection
+                else None,
 
-                crop.get("x1") if crop else None,
-                crop.get("y1") if crop else None,
-                crop.get("x2") if crop else None,
-                crop.get("y2") if crop else None,
-                crop.get("width") if crop else None,
-                crop.get("height") if crop else None,
+                detection.get("y")
+                if detection
+                else None,
+
+                detection.get("width")
+                if detection
+                else None,
+
+                detection.get("height")
+                if detection
+                else None,
+
+                crop.get("x1")
+                if crop
+                else None,
+
+                crop.get("y1")
+                if crop
+                else None,
+
+                crop.get("x2")
+                if crop
+                else None,
+
+                crop.get("y2")
+                if crop
+                else None,
+
+                crop.get("width")
+                if crop
+                else None,
+
+                crop.get("height")
+                if crop
+                else None,
 
                 output_path,
+
                 datetime.now().isoformat(
                     timespec="seconds"
                 ),
@@ -159,6 +193,8 @@ def get_processing_history(
 
     finally:
         connection.close()
+
+
 def update_rotation(
     file_id: str,
     angle: int,

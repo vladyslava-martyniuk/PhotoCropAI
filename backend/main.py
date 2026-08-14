@@ -1,6 +1,8 @@
+from fastapi.staticfiles import StaticFiles
 from io import BytesIO
 from pathlib import Path
 import shutil
+import sys
 
 from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -38,6 +40,13 @@ app = FastAPI(
     version="0.1.0",
 )
 
+if getattr(sys, "frozen", False):
+    RESOURCE_DIR = Path(sys._MEIPASS)
+    APP_DIR = Path(sys.executable).resolve().parent
+else:
+    RESOURCE_DIR = Path(__file__).resolve().parents[1]
+    APP_DIR = RESOURCE_DIR
+
 init_database()
 
 
@@ -55,7 +64,7 @@ app.add_middleware(
 
 def get_output_dir() -> Path:
     output_dir = (
-        Path(__file__).resolve().parents[1]
+        APP_DIR
         / "data"
         / "output"
     )
@@ -483,3 +492,19 @@ def get_crop_result(
             status_code=404,
             detail=str(exc),
         ) from exc
+    
+FRONTEND_DIST = (
+    RESOURCE_DIR
+    / "frontend"
+    / "dist"
+)
+
+if FRONTEND_DIST.exists():
+    app.mount(
+        "/",
+        StaticFiles(
+            directory=FRONTEND_DIST,
+            html=True,
+        ),
+        name="frontend",
+    )
