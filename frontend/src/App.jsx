@@ -3,16 +3,10 @@ import "./App.css";
 
 function App() {
   const [backendStatus, setBackendStatus] = useState("Loading...");
-
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [items, setItems] = useState([]);
   const [uploadStatus, setUploadStatus] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
-
-  const [selectedZip, setSelectedZip] = useState(null);
-  const [zipStatus, setZipStatus] = useState("");
-  const [zipResultUrl, setZipResultUrl] = useState("");
-  const [isZipProcessing, setIsZipProcessing] = useState(false);
 
   useEffect(() => {
     fetch("http://127.0.0.1:8000/api/health")
@@ -115,6 +109,7 @@ function App() {
     });
 
     const formData = new FormData();
+
     formData.append(
       "file",
       item.file
@@ -209,6 +204,16 @@ function App() {
     );
 
     for (const item of items) {
+      if (item.status === "cancelled") {
+        completed += 1;
+
+        setUploadStatus(
+          `Processing ${completed} / ${items.length}`
+        );
+
+        continue;
+      }
+
       try {
         await processSingleImage(item);
       } catch (error) {
@@ -287,6 +292,49 @@ function App() {
     }
   }
 
+  async function handleCancel(item) {
+    if (!item.fileId) {
+      return;
+    }
+
+    try {
+      updateItem(item.localId, {
+        status: "Cancelling...",
+        error: "",
+      });
+
+      const response = await fetch(
+        `http://127.0.0.1:8000/api/images/${item.fileId}/cancel`,
+        {
+          method: "POST",
+        }
+      );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail ||
+            "Cancel failed"
+        );
+      }
+
+      updateItem(item.localId, {
+        status: "cancelled",
+        croppedUrl: "",
+        detection: null,
+        crop: null,
+        error: "",
+      });
+    } catch (error) {
+      updateItem(item.localId, {
+        status: "Error",
+        error: error.message,
+      });
+    }
+  }
+
   function handleClearAll() {
     items.forEach((item) => {
       if (item.previewUrl) {
@@ -299,75 +347,6 @@ function App() {
     setSelectedFiles([]);
     setItems([]);
     setUploadStatus("");
-  }
-
-  function handleZipChange(event) {
-    const file =
-      event.target.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    setSelectedZip(file);
-    setZipStatus("");
-    setZipResultUrl("");
-
-    event.target.value = "";
-  }
-
-  async function handleZipProcess() {
-    if (!selectedZip) {
-      return;
-    }
-
-    const formData =
-      new FormData();
-
-    formData.append(
-      "file",
-      selectedZip
-    );
-
-    setIsZipProcessing(true);
-    setZipStatus(
-      "Processing ZIP..."
-    );
-    setZipResultUrl("");
-
-    try {
-      const response = await fetch(
-        "http://127.0.0.1:8000/api/zip/process",
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
-
-      const data =
-        await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.detail ||
-            "ZIP processing error"
-        );
-      }
-
-      setZipResultUrl(
-        `http://127.0.0.1:8000${data.download_url}`
-      );
-
-      setZipStatus(
-        `Completed: ${data.processed_count} processed, ${data.failed_count} failed`
-      );
-    } catch (error) {
-      setZipStatus(
-        error.message
-      );
-    } finally {
-      setIsZipProcessing(false);
-    }
   }
 
   return (
@@ -454,7 +433,9 @@ function App() {
                     />
 
                     {item.detection &&
-                      item.crop && (
+                      item.crop &&
+                      item.status !==
+                        "cancelled" && (
                         <>
                           <div
                             className="detectedBox"
@@ -571,34 +552,64 @@ function App() {
                       alt={`Processed ${item.file.name}`}
                       className="previewImage"
                     />
-
-                    <div className="rotateControls">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleRotate(
-                            item,
-                            270
-                          )
-                        }
-                      >
-                        Rotate left
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleRotate(
-                            item,
-                            90
-                          )
-                        }
-                      >
-                        Rotate right
-                      </button>
-                    </div>
                   </div>
                 )}
+              </div>
+
+              <div className="itemActions">
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleRotate(
+                      item,
+                      270
+                    )
+                  }
+                  disabled={
+                    !item.croppedUrl ||
+                    item.status ===
+                      "cancelled" ||
+                    item.status ===
+                      "Cancelling..."
+                  }
+                >
+                  Rotate left
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleRotate(
+                      item,
+                      90
+                    )
+                  }
+                  disabled={
+                    !item.croppedUrl ||
+                    item.status ===
+                      "cancelled" ||
+                    item.status ===
+                      "Cancelling..."
+                  }
+                >
+                  Rotate right
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleCancel(item)
+                  }
+                  disabled={
+                    !item.fileId ||
+                    item.status ===
+                      "cancelled" ||
+                    item.status ===
+                      "Cancelling..."
+                  }
+                >
+                  Cancel
+                </button>
               </div>
 
               <p>
