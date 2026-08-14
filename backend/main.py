@@ -25,6 +25,8 @@ from services.orientation_service import (
 )
 
 
+
+
 app = FastAPI(
     title="PhotoCropAI API",
     version="0.1.0",
@@ -308,3 +310,4 @@ def get_crop_result(file_id: str):
             status_code=404,
             detail=str(exc),
         ) from exc
+

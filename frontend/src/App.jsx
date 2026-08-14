@@ -3,10 +3,16 @@ import "./App.css";
 
 function App() {
   const [backendStatus, setBackendStatus] = useState("Loading...");
+
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [items, setItems] = useState([]);
   const [uploadStatus, setUploadStatus] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+
+  const [selectedZip, setSelectedZip] = useState(null);
+  const [zipStatus, setZipStatus] = useState("");
+  const [zipResultUrl, setZipResultUrl] = useState("");
+  const [isZipProcessing, setIsZipProcessing] = useState(false);
 
   useEffect(() => {
     fetch("http://127.0.0.1:8000/api/health")
@@ -17,48 +23,53 @@ function App() {
 
         return response.json();
       })
-      .then(() => setBackendStatus("Backend is working"))
-      .catch(() => setBackendStatus("Backend error"));
+      .then(() => {
+        setBackendStatus("Backend is working");
+      })
+      .catch(() => {
+        setBackendStatus("Backend error");
+      });
   }, []);
 
-  useEffect(() => {
-    return () => {
-      items.forEach((item) => {
-        if (item.previewUrl) {
-          URL.revokeObjectURL(item.previewUrl);
-        }
-      });
-    };
-  }, [items]);
-
   function handleFileChange(event) {
-    const newFiles = Array.from(event.target.files || []);
+    const newFiles = Array.from(
+      event.target.files || []
+    );
 
     if (newFiles.length === 0) {
       return;
     }
 
-    const remainingSlots = 20 - selectedFiles.length;
+    const remainingSlots =
+      20 - selectedFiles.length;
 
     if (remainingSlots <= 0) {
-      setUploadStatus("Maximum 20 images");
+      setUploadStatus(
+        "Maximum 20 images"
+      );
+
       event.target.value = "";
       return;
     }
 
-    const filesToAdd = newFiles.slice(0, remainingSlots);
+    const filesToAdd = newFiles.slice(
+      0,
+      remainingSlots
+    );
 
-    const newItems = filesToAdd.map((file, index) => ({
-      localId: `${Date.now()}-${index}-${file.name}`,
-      file,
-      fileId: null,
-      previewUrl: URL.createObjectURL(file),
-      croppedUrl: "",
-      detection: null,
-      crop: null,
-      status: "Waiting",
-      error: "",
-    }));
+    const newItems = filesToAdd.map(
+      (file, index) => ({
+        localId: `${Date.now()}-${index}-${file.name}`,
+        file,
+        fileId: null,
+        previewUrl: URL.createObjectURL(file),
+        croppedUrl: "",
+        detection: null,
+        crop: null,
+        status: "Waiting",
+        error: "",
+      })
+    );
 
     setSelectedFiles((currentFiles) => [
       ...currentFiles,
@@ -81,7 +92,10 @@ function App() {
     event.target.value = "";
   }
 
-  function updateItem(localId, changes) {
+  function updateItem(
+    localId,
+    changes
+  ) {
     setItems((currentItems) =>
       currentItems.map((item) =>
         item.localId === localId
@@ -101,7 +115,10 @@ function App() {
     });
 
     const formData = new FormData();
-    formData.append("file", item.file);
+    formData.append(
+      "file",
+      item.file
+    );
 
     const uploadResponse = await fetch(
       "http://127.0.0.1:8000/api/images/upload",
@@ -111,11 +128,13 @@ function App() {
       }
     );
 
-    const uploadData = await uploadResponse.json();
+    const uploadData =
+      await uploadResponse.json();
 
     if (!uploadResponse.ok) {
       throw new Error(
-        uploadData.detail || "Loading error"
+        uploadData.detail ||
+          "Loading error"
       );
     }
 
@@ -131,17 +150,21 @@ function App() {
       }
     );
 
-    const detectData = await detectResponse.json();
+    const detectData =
+      await detectResponse.json();
 
     if (!detectResponse.ok) {
       throw new Error(
-        detectData.detail || "Object detection error"
+        detectData.detail ||
+          "Object detection error"
       );
     }
 
     updateItem(item.localId, {
-      detection: detectData.detection,
-      crop: detectData.crop,
+      detection:
+        detectData.detection,
+      crop:
+        detectData.crop,
       status: "Cropping...",
     });
 
@@ -152,11 +175,13 @@ function App() {
       }
     );
 
-    const cropData = await cropResponse.json();
+    const cropData =
+      await cropResponse.json();
 
     if (!cropResponse.ok) {
       throw new Error(
-        cropData.detail || "Cropping error"
+        cropData.detail ||
+          "Cropping error"
       );
     }
 
@@ -208,14 +233,19 @@ function App() {
       );
     } else {
       setUploadStatus(
-        `Finished: ${completed - failed} successful, ${failed} failed`
+        `Finished: ${
+          completed - failed
+        } successful, ${failed} failed`
       );
     }
 
     setIsProcessing(false);
   }
 
-  async function handleRotate(item, angle) {
+  async function handleRotate(
+    item,
+    angle
+  ) {
     if (!item.fileId) {
       return;
     }
@@ -233,11 +263,13 @@ function App() {
         }
       );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
         throw new Error(
-          data.detail || "Rotation error"
+          data.detail ||
+            "Rotation error"
         );
       }
 
@@ -258,13 +290,84 @@ function App() {
   function handleClearAll() {
     items.forEach((item) => {
       if (item.previewUrl) {
-        URL.revokeObjectURL(item.previewUrl);
+        URL.revokeObjectURL(
+          item.previewUrl
+        );
       }
     });
 
     setSelectedFiles([]);
     setItems([]);
     setUploadStatus("");
+  }
+
+  function handleZipChange(event) {
+    const file =
+      event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    setSelectedZip(file);
+    setZipStatus("");
+    setZipResultUrl("");
+
+    event.target.value = "";
+  }
+
+  async function handleZipProcess() {
+    if (!selectedZip) {
+      return;
+    }
+
+    const formData =
+      new FormData();
+
+    formData.append(
+      "file",
+      selectedZip
+    );
+
+    setIsZipProcessing(true);
+    setZipStatus(
+      "Processing ZIP..."
+    );
+    setZipResultUrl("");
+
+    try {
+      const response = await fetch(
+        "http://127.0.0.1:8000/api/zip/process",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail ||
+            "ZIP processing error"
+        );
+      }
+
+      setZipResultUrl(
+        `http://127.0.0.1:8000${data.download_url}`
+      );
+
+      setZipStatus(
+        `Completed: ${data.processed_count} processed, ${data.failed_count} failed`
+      );
+    } catch (error) {
+      setZipStatus(
+        error.message
+      );
+    } finally {
+      setIsZipProcessing(false);
+    }
   }
 
   return (
@@ -313,7 +416,9 @@ function App() {
 
       {selectedFiles.length > 0 && (
         <p>
-          Selected: {selectedFiles.length} / 20 images
+          Selected:{" "}
+          {selectedFiles.length} / 20
+          images
         </p>
       )}
 
@@ -322,136 +427,192 @@ function App() {
       )}
 
       <section className="batchGrid">
-        {items.map((item, index) => (
-          <article
-            className="batchItem"
-            key={item.localId}
-          >
-            <h2>
-              {index + 1}. {item.file.name}
-            </h2>
+        {items.map(
+          (item, index) => (
+            <article
+              className="batchItem"
+              key={item.localId}
+            >
+              <h2>
+                {index + 1}.{" "}
+                {item.file.name}
+              </h2>
 
-            <div className="batchImages">
-              <div>
-                <h3>Original</h3>
-
-                <div className="imageWrapper">
-                  <img
-                    src={item.previewUrl}
-                    alt={item.file.name}
-                    className="previewImage"
-                  />
-
-                  {item.detection && item.crop && (
-                    <>
-                      <div
-                        className="detectedBox"
-                        style={{
-                          left: `${
-                            (
-                              item.detection.x /
-                              item.detection.image_width
-                            ) * 100
-                          }%`,
-                          top: `${
-                            (
-                              item.detection.y /
-                              item.detection.image_height
-                            ) * 100
-                          }%`,
-                          width: `${
-                            (
-                              item.detection.width /
-                              item.detection.image_width
-                            ) * 100
-                          }%`,
-                          height: `${
-                            (
-                              item.detection.height /
-                              item.detection.image_height
-                            ) * 100
-                          }%`,
-                        }}
-                      />
-
-                      <div
-                        className="cropBox"
-                        style={{
-                          left: `${
-                            (
-                              item.crop.x1 /
-                              item.detection.image_width
-                            ) * 100
-                          }%`,
-                          top: `${
-                            (
-                              item.crop.y1 /
-                              item.detection.image_height
-                            ) * 100
-                          }%`,
-                          width: `${
-                            (
-                              item.crop.width /
-                              item.detection.image_width
-                            ) * 100
-                          }%`,
-                          height: `${
-                            (
-                              item.crop.height /
-                              item.detection.image_height
-                            ) * 100
-                          }%`,
-                        }}
-                      />
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {item.croppedUrl && (
+              <div className="batchImages">
                 <div>
-                  <h3>Result</h3>
+                  <h3>Original</h3>
 
-                  <img
-                    src={item.croppedUrl}
-                    alt={`Processed ${item.file.name}`}
-                    className="previewImage"
-                  />
-
-                  <div className="rotateControls">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleRotate(item, 270)
+                  <div className="imageWrapper">
+                    <img
+                      src={
+                        item.previewUrl
                       }
-                    >
-                      Rotate left
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleRotate(item, 90)
+                      alt={
+                        item.file.name
                       }
-                    >
-                      Rotate right
-                    </button>
+                      className="previewImage"
+                    />
+
+                    {item.detection &&
+                      item.crop && (
+                        <>
+                          <div
+                            className="detectedBox"
+                            style={{
+                              left: `${
+                                (
+                                  item
+                                    .detection
+                                    .x /
+                                  item
+                                    .detection
+                                    .image_width
+                                ) *
+                                100
+                              }%`,
+                              top: `${
+                                (
+                                  item
+                                    .detection
+                                    .y /
+                                  item
+                                    .detection
+                                    .image_height
+                                ) *
+                                100
+                              }%`,
+                              width: `${
+                                (
+                                  item
+                                    .detection
+                                    .width /
+                                  item
+                                    .detection
+                                    .image_width
+                                ) *
+                                100
+                              }%`,
+                              height: `${
+                                (
+                                  item
+                                    .detection
+                                    .height /
+                                  item
+                                    .detection
+                                    .image_height
+                                ) *
+                                100
+                              }%`,
+                            }}
+                          />
+
+                          <div
+                            className="cropBox"
+                            style={{
+                              left: `${
+                                (
+                                  item
+                                    .crop
+                                    .x1 /
+                                  item
+                                    .detection
+                                    .image_width
+                                ) *
+                                100
+                              }%`,
+                              top: `${
+                                (
+                                  item
+                                    .crop
+                                    .y1 /
+                                  item
+                                    .detection
+                                    .image_height
+                                ) *
+                                100
+                              }%`,
+                              width: `${
+                                (
+                                  item
+                                    .crop
+                                    .width /
+                                  item
+                                    .detection
+                                    .image_width
+                                ) *
+                                100
+                              }%`,
+                              height: `${
+                                (
+                                  item
+                                    .crop
+                                    .height /
+                                  item
+                                    .detection
+                                    .image_height
+                                ) *
+                                100
+                              }%`,
+                            }}
+                          />
+                        </>
+                      )}
                   </div>
                 </div>
-              )}
-            </div>
 
-            <p>
-              Status: {item.status}
-            </p>
+                {item.croppedUrl && (
+                  <div>
+                    <h3>Result</h3>
 
-            {item.error && (
-              <p className="errorMessage">
-                {item.error}
+                    <img
+                      src={
+                        item.croppedUrl
+                      }
+                      alt={`Processed ${item.file.name}`}
+                      className="previewImage"
+                    />
+
+                    <div className="rotateControls">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleRotate(
+                            item,
+                            270
+                          )
+                        }
+                      >
+                        Rotate left
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleRotate(
+                            item,
+                            90
+                          )
+                        }
+                      >
+                        Rotate right
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <p>
+                Status: {item.status}
               </p>
-            )}
-          </article>
-        ))}
+
+              {item.error && (
+                <p className="errorMessage">
+                  {item.error}
+                </p>
+              )}
+            </article>
+          )
+        )}
       </section>
     </main>
   );
