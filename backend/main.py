@@ -1,8 +1,11 @@
 from fastapi.staticfiles import StaticFiles
 from io import BytesIO
 from pathlib import Path
+import json
 import shutil
 import sys
+import tkinter as tk
+from tkinter import filedialog
 
 from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -47,6 +50,66 @@ else:
     RESOURCE_DIR = Path(__file__).resolve().parents[1]
     APP_DIR = RESOURCE_DIR
 
+
+DEFAULT_OUTPUT_DIR = APP_DIR / "data" / "output"
+SETTINGS_PATH = APP_DIR / "data" / "settings.json"
+
+
+def load_output_dir() -> Path:
+    if SETTINGS_PATH.exists():
+        try:
+            settings = json.loads(
+                SETTINGS_PATH.read_text(
+                    encoding="utf-8"
+                )
+            )
+
+            saved_path = settings.get(
+                "output_folder"
+            )
+
+            if saved_path:
+                folder = Path(saved_path)
+
+                if (
+                    folder.exists()
+                    and folder.is_dir()
+                ):
+                    return folder
+
+        except (
+            OSError,
+            json.JSONDecodeError,
+        ):
+            pass
+
+    return DEFAULT_OUTPUT_DIR
+
+
+CURRENT_OUTPUT_DIR = load_output_dir()
+
+
+def save_output_dir(
+    output_dir: Path,
+) -> None:
+    SETTINGS_PATH.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    SETTINGS_PATH.write_text(
+        json.dumps(
+            {
+                "output_folder":
+                    str(output_dir),
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+
 init_database()
 
 
@@ -63,18 +126,12 @@ app.add_middleware(
 
 
 def get_output_dir() -> Path:
-    output_dir = (
-        APP_DIR
-        / "data"
-        / "output"
-    )
-
-    output_dir.mkdir(
+    CURRENT_OUTPUT_DIR.mkdir(
         parents=True,
         exist_ok=True,
     )
 
-    return output_dir
+    return CURRENT_OUTPUT_DIR
 
 
 def save_failed_image(
@@ -107,6 +164,68 @@ def save_failed_image(
 def health_check() -> dict[str, str]:
     return {
         "status": "ok",
+    }
+
+
+@app.get(
+    "/api/settings/output-folder"
+)
+def get_output_folder() -> dict:
+    output_dir = get_output_dir()
+
+    return {
+        "path": str(output_dir),
+    }
+
+
+@app.post(
+    "/api/settings/output-folder/select"
+)
+def select_output_folder() -> dict:
+    global CURRENT_OUTPUT_DIR
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes(
+        "-topmost",
+        True,
+    )
+
+    try:
+        selected_folder = (
+            filedialog.askdirectory(
+                title="Choose output folder",
+                initialdir=str(
+                    get_output_dir()
+                ),
+            )
+        )
+    finally:
+        root.destroy()
+
+    if not selected_folder:
+        return {
+            "selected": False,
+            "path": str(
+                get_output_dir()
+            ),
+        }
+
+    output_dir = Path(
+        selected_folder
+    ).resolve()
+
+    CURRENT_OUTPUT_DIR = output_dir
+
+    save_output_dir(
+        CURRENT_OUTPUT_DIR
+    )
+
+    return {
+        "selected": True,
+        "path": str(
+            CURRENT_OUTPUT_DIR
+        ),
     }
 
 
@@ -492,7 +611,8 @@ def get_crop_result(
             status_code=404,
             detail=str(exc),
         ) from exc
-    
+
+
 FRONTEND_DIST = (
     RESOURCE_DIR
     / "frontend"

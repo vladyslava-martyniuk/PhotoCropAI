@@ -17,3 +17,4 @@ data/working/*
 
 data/output/*
 !data/output/.gitkeep
+data/settings.json

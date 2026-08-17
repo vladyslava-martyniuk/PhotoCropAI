@@ -1,5 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./App.css";
+
+const MAX_IMAGES = 20;
+
+const ALLOWED_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/bmp",
+  "image/tiff",
+]);
 
 function App() {
   const [backendStatus, setBackendStatus] = useState("Loading...");
@@ -7,9 +17,15 @@ function App() {
   const [items, setItems] = useState([]);
   const [uploadStatus, setUploadStatus] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [outputFolder, setOutputFolder] = useState("");
+  const [isSelectingOutputFolder, setIsSelectingOutputFolder] =
+    useState(false);
+
+  const dragCounter = useRef(0);
 
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/api/health")
+    fetch("/api/health")
       .then((response) => {
         if (!response.ok) {
           throw new Error("Backend error");
@@ -23,30 +39,48 @@ function App() {
       .catch(() => {
         setBackendStatus("Backend error");
       });
+
+    fetch("/api/settings/output-folder")
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Cannot get output folder");
+        }
+
+        return response.json();
+      })
+      .then((data) => {
+        setOutputFolder(data.path);
+      })
+      .catch(() => {
+        setOutputFolder("");
+      });
   }, []);
 
-  function handleFileChange(event) {
-    const newFiles = Array.from(
-      event.target.files || []
-    );
+  function addFiles(files) {
+    const newFiles = Array.from(files || []);
 
     if (newFiles.length === 0) {
       return;
     }
 
-    const remainingSlots =
-      20 - selectedFiles.length;
+    const validFiles = newFiles.filter((file) =>
+      ALLOWED_TYPES.has(file.type)
+    );
 
-    if (remainingSlots <= 0) {
-      setUploadStatus(
-        "Maximum 20 images"
-      );
-
-      event.target.value = "";
+    if (validFiles.length === 0) {
+      setUploadStatus("No supported image files found");
       return;
     }
 
-    const filesToAdd = newFiles.slice(
+    const remainingSlots =
+      MAX_IMAGES - selectedFiles.length;
+
+    if (remainingSlots <= 0) {
+      setUploadStatus("Maximum 20 images");
+      return;
+    }
+
+    const filesToAdd = validFiles.slice(
       0,
       remainingSlots
     );
@@ -75,21 +109,68 @@ function App() {
       ...newItems,
     ]);
 
-    if (newFiles.length > remainingSlots) {
-      setUploadStatus(
-        `Added ${filesToAdd.length} images. Maximum is 20.`
+    const messages = [];
+
+    if (validFiles.length < newFiles.length) {
+      messages.push(
+        `${
+          newFiles.length - validFiles.length
+        } unsupported file(s) skipped`
       );
-    } else {
-      setUploadStatus("");
     }
 
+    if (validFiles.length > remainingSlots) {
+      messages.push(
+        `Only ${filesToAdd.length} image(s) added. Maximum is 20`
+      );
+    }
+
+    setUploadStatus(messages.join(". "));
+  }
+
+  function handleFileChange(event) {
+    addFiles(event.target.files);
     event.target.value = "";
   }
 
-  function updateItem(
-    localId,
-    changes
-  ) {
+  function handleDragEnter(event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    dragCounter.current += 1;
+    setIsDragging(true);
+  }
+
+  function handleDragOver(event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    event.dataTransfer.dropEffect = "copy";
+  }
+
+  function handleDragLeave(event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    dragCounter.current -= 1;
+
+    if (dragCounter.current <= 0) {
+      dragCounter.current = 0;
+      setIsDragging(false);
+    }
+  }
+
+  function handleDrop(event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    dragCounter.current = 0;
+    setIsDragging(false);
+
+    addFiles(event.dataTransfer.files);
+  }
+
+  function updateItem(localId, changes) {
     setItems((currentItems) =>
       currentItems.map((item) =>
         item.localId === localId
@@ -116,7 +197,7 @@ function App() {
     );
 
     const uploadResponse = await fetch(
-      "http://127.0.0.1:8000/api/images/upload",
+      "/api/images/upload",
       {
         method: "POST",
         body: formData,
@@ -139,7 +220,7 @@ function App() {
     });
 
     const detectResponse = await fetch(
-      `http://127.0.0.1:8000/api/images/${uploadData.id}/detect`,
+      `/api/images/${uploadData.id}/detect`,
       {
         method: "POST",
       }
@@ -156,15 +237,13 @@ function App() {
     }
 
     updateItem(item.localId, {
-      detection:
-        detectData.detection,
-      crop:
-        detectData.crop,
+      detection: detectData.detection,
+      crop: detectData.crop,
       status: "Cropping...",
     });
 
     const cropResponse = await fetch(
-      `http://127.0.0.1:8000/api/images/${uploadData.id}/crop`,
+      `/api/images/${uploadData.id}/crop`,
       {
         method: "POST",
       }
@@ -183,8 +262,7 @@ function App() {
     updateItem(item.localId, {
       fileId: uploadData.id,
       croppedUrl:
-        `http://127.0.0.1:8000${cropData.preview_url}` +
-        `?t=${Date.now()}`,
+        `${cropData.preview_url}?t=${Date.now()}`,
       status: "Completed",
     });
   }
@@ -262,7 +340,7 @@ function App() {
       });
 
       const response = await fetch(
-        `http://127.0.0.1:8000/api/images/${item.fileId}/rotate/${angle}`,
+        `/api/images/${item.fileId}/rotate/${angle}`,
         {
           method: "POST",
         }
@@ -280,8 +358,7 @@ function App() {
 
       updateItem(item.localId, {
         croppedUrl:
-          `http://127.0.0.1:8000${data.preview_url}` +
-          `?t=${Date.now()}`,
+          `${data.preview_url}?t=${Date.now()}`,
         status: "Completed",
       });
     } catch (error) {
@@ -304,7 +381,7 @@ function App() {
       });
 
       const response = await fetch(
-        `http://127.0.0.1:8000/api/images/${item.fileId}/cancel`,
+        `/api/images/${item.fileId}/cancel`,
         {
           method: "POST",
         }
@@ -335,6 +412,40 @@ function App() {
     }
   }
 
+  async function handleChooseOutputFolder() {
+    try {
+      setIsSelectingOutputFolder(true);
+
+      const response = await fetch(
+        "/api/settings/output-folder/select",
+        {
+          method: "POST",
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail ||
+            "Cannot select output folder"
+        );
+      }
+
+      setOutputFolder(data.path);
+
+      if (data.selected) {
+        setUploadStatus(
+          "Output folder selected"
+        );
+      }
+    } catch (error) {
+      setUploadStatus(error.message);
+    } finally {
+      setIsSelectingOutputFolder(false);
+    }
+  }
+
   function handleClearAll() {
     items.forEach((item) => {
       if (item.previewUrl) {
@@ -355,7 +466,46 @@ function App() {
 
       <p>{backendStatus}</p>
 
-      <section className="panel">
+      <section className="outputFolderPanel">
+        <div>
+          <strong>Output folder:</strong>
+
+          <p className="outputFolderPath">
+            {outputFolder || "Loading..."}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleChooseOutputFolder}
+          disabled={
+            isProcessing ||
+            isSelectingOutputFolder
+          }
+        >
+          {isSelectingOutputFolder
+            ? "Selecting..."
+            : "Choose output folder"}
+        </button>
+      </section>
+
+      <section
+        className={`dropZone ${
+          isDragging ? "dragging" : ""
+        }`}
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        <p className="dropZoneTitle">
+          Drag & drop images here
+        </p>
+
+        <p className="dropZoneText">
+          or
+        </p>
+
         <label className="fileButton">
           Choose images
 
@@ -367,7 +517,9 @@ function App() {
             hidden
           />
         </label>
+      </section>
 
+      <section className="panel">
         <button
           type="button"
           onClick={handleProcessAll}
@@ -396,8 +548,7 @@ function App() {
       {selectedFiles.length > 0 && (
         <p>
           Selected:{" "}
-          {selectedFiles.length} / 20
-          images
+          {selectedFiles.length} / 20 images
         </p>
       )}
 
@@ -423,12 +574,8 @@ function App() {
 
                   <div className="imageWrapper">
                     <img
-                      src={
-                        item.previewUrl
-                      }
-                      alt={
-                        item.file.name
-                      }
+                      src={item.previewUrl}
+                      alt={item.file.name}
                       className="previewImage"
                     />
 
@@ -442,47 +589,31 @@ function App() {
                             style={{
                               left: `${
                                 (
-                                  item
-                                    .detection
-                                    .x /
-                                  item
-                                    .detection
+                                  item.detection.x /
+                                  item.detection
                                     .image_width
-                                ) *
-                                100
+                                ) * 100
                               }%`,
                               top: `${
                                 (
-                                  item
-                                    .detection
-                                    .y /
-                                  item
-                                    .detection
+                                  item.detection.y /
+                                  item.detection
                                     .image_height
-                                ) *
-                                100
+                                ) * 100
                               }%`,
                               width: `${
                                 (
-                                  item
-                                    .detection
-                                    .width /
-                                  item
-                                    .detection
+                                  item.detection.width /
+                                  item.detection
                                     .image_width
-                                ) *
-                                100
+                                ) * 100
                               }%`,
                               height: `${
                                 (
-                                  item
-                                    .detection
-                                    .height /
-                                  item
-                                    .detection
+                                  item.detection.height /
+                                  item.detection
                                     .image_height
-                                ) *
-                                100
+                                ) * 100
                               }%`,
                             }}
                           />
@@ -492,47 +623,31 @@ function App() {
                             style={{
                               left: `${
                                 (
-                                  item
-                                    .crop
-                                    .x1 /
-                                  item
-                                    .detection
+                                  item.crop.x1 /
+                                  item.detection
                                     .image_width
-                                ) *
-                                100
+                                ) * 100
                               }%`,
                               top: `${
                                 (
-                                  item
-                                    .crop
-                                    .y1 /
-                                  item
-                                    .detection
+                                  item.crop.y1 /
+                                  item.detection
                                     .image_height
-                                ) *
-                                100
+                                ) * 100
                               }%`,
                               width: `${
                                 (
-                                  item
-                                    .crop
-                                    .width /
-                                  item
-                                    .detection
+                                  item.crop.width /
+                                  item.detection
                                     .image_width
-                                ) *
-                                100
+                                ) * 100
                               }%`,
                               height: `${
                                 (
-                                  item
-                                    .crop
-                                    .height /
-                                  item
-                                    .detection
+                                  item.crop.height /
+                                  item.detection
                                     .image_height
-                                ) *
-                                100
+                                ) * 100
                               }%`,
                             }}
                           />
@@ -546,9 +661,7 @@ function App() {
                     <h3>Result</h3>
 
                     <img
-                      src={
-                        item.croppedUrl
-                      }
+                      src={item.croppedUrl}
                       alt={`Processed ${item.file.name}`}
                       className="previewImage"
                     />
