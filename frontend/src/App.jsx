@@ -49,7 +49,7 @@ function App() {
         return response.json();
       })
       .then((data) => {
-        setOutputFolder(data.path);
+        setOutputFolder(data.path || "");
       })
       .catch(() => {
         setOutputFolder("");
@@ -268,7 +268,10 @@ function App() {
   }
 
   async function handleProcessAll() {
-    if (items.length === 0) {
+    if (
+      items.length === 0 ||
+      !outputFolder
+    ) {
       return;
     }
 
@@ -432,7 +435,9 @@ function App() {
         );
       }
 
-      setOutputFolder(data.path);
+      setOutputFolder(
+        data.path || ""
+      );
 
       if (data.selected) {
         setUploadStatus(
@@ -440,9 +445,40 @@ function App() {
         );
       }
     } catch (error) {
-      setUploadStatus(error.message);
+      setUploadStatus(
+        error.message
+      );
     } finally {
       setIsSelectingOutputFolder(false);
+    }
+  }
+
+  async function handleClearOutputFolder() {
+    try {
+      const response = await fetch(
+        "/api/settings/output-folder/clear",
+        {
+          method: "POST",
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail ||
+            "Cannot clear output folder"
+        );
+      }
+
+      setOutputFolder("");
+      setUploadStatus(
+        "Output folder cleared"
+      );
+    } catch (error) {
+      setUploadStatus(
+        error.message
+      );
     }
   }
 
@@ -470,24 +506,50 @@ function App() {
         <div>
           <strong>Output folder:</strong>
 
-          <p className="outputFolderPath">
-            {outputFolder || "Loading..."}
+          <p
+            className={
+              outputFolder
+                ? "outputFolderPath"
+                : "outputFolderPath outputFolderMissing"
+            }
+          >
+            {outputFolder || "Not selected"}
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={handleChooseOutputFolder}
-          disabled={
-            isProcessing ||
-            isSelectingOutputFolder
-          }
-        >
-          {isSelectingOutputFolder
-            ? "Selecting..."
-            : "Choose output folder"}
-        </button>
+        <div className="outputFolderActions">
+          <button
+            type="button"
+            onClick={handleChooseOutputFolder}
+            disabled={
+              isProcessing ||
+              isSelectingOutputFolder
+            }
+          >
+            {isSelectingOutputFolder
+              ? "Selecting..."
+              : "Choose output folder"}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleClearOutputFolder}
+            disabled={
+              !outputFolder ||
+              isProcessing ||
+              isSelectingOutputFolder
+            }
+          >
+            Clear output folder
+          </button>
+        </div>
       </section>
+
+      {!outputFolder && (
+        <p className="outputFolderWarning">
+          Choose an output folder before processing images.
+        </p>
+      )}
 
       <section
         className={`dropZone ${
@@ -525,7 +587,8 @@ function App() {
           onClick={handleProcessAll}
           disabled={
             items.length === 0 ||
-            isProcessing
+            isProcessing ||
+            !outputFolder
           }
         >
           {isProcessing

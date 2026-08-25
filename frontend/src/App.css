@@ -29,14 +29,6 @@ button:disabled {
 .panel {
   display: flex;
   gap: 12px;
-  padding: 24px;
-  background: white;
-  border-radius: 10px;
-}
-
-.panel {
-  display: flex;
-  gap: 12px;
   align-items: center;
   padding: 20px;
   background: white;
@@ -50,11 +42,6 @@ button {
   border-radius: 6px;
   background: white;
   cursor: pointer;
-}
-
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .previewPanel {
@@ -133,11 +120,11 @@ button:disabled {
   margin-top: 0;
 }
 
-.rotateControls {
+.itemActions {
   margin-top: 16px;
   display: flex;
-  justify-content: center;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .errorMessage {
@@ -178,13 +165,13 @@ button:disabled {
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
   padding: 20px;
   background: white;
   border-radius: 10px;
 }
 
-.outputFolderPanel > div {
+.outputFolderPanel > div:first-child {
   flex: 1;
   min-width: 250px;
 }
@@ -194,8 +181,27 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
+.outputFolderMissing {
+  color: #b91c1c;
+}
+
+.outputFolderActions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.outputFolderWarning {
+  margin: 0 0 20px;
+  color: #b91c1c;
+}
+
 @media (max-width: 800px) {
   .batchImages {
     grid-template-columns: 1fr;
+  }
+
+  .outputFolderActions {
+    width: 100%;
   }
 }

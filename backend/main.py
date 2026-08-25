@@ -51,39 +51,42 @@ else:
     APP_DIR = RESOURCE_DIR
 
 
-DEFAULT_OUTPUT_DIR = APP_DIR / "data" / "output"
 SETTINGS_PATH = APP_DIR / "data" / "settings.json"
 
 
-def load_output_dir() -> Path:
-    if SETTINGS_PATH.exists():
-        try:
-            settings = json.loads(
-                SETTINGS_PATH.read_text(
-                    encoding="utf-8"
-                )
+def load_output_dir() -> Path | None:
+    if not SETTINGS_PATH.exists():
+        return None
+
+    try:
+        settings = json.loads(
+            SETTINGS_PATH.read_text(
+                encoding="utf-8"
             )
+        )
 
-            saved_path = settings.get(
-                "output_folder"
-            )
+        saved_path = settings.get(
+            "output_folder"
+        )
 
-            if saved_path:
-                folder = Path(saved_path)
+        if not saved_path:
+            return None
 
-                if (
-                    folder.exists()
-                    and folder.is_dir()
-                ):
-                    return folder
+        folder = Path(saved_path)
 
-        except (
-            OSError,
-            json.JSONDecodeError,
+        if (
+            folder.exists()
+            and folder.is_dir()
         ):
-            pass
+            return folder
 
-    return DEFAULT_OUTPUT_DIR
+    except (
+        OSError,
+        json.JSONDecodeError,
+    ):
+        pass
+
+    return None
 
 
 CURRENT_OUTPUT_DIR = load_output_dir()
@@ -110,6 +113,11 @@ def save_output_dir(
     )
 
 
+def clear_saved_output_dir() -> None:
+    if SETTINGS_PATH.exists():
+        SETTINGS_PATH.unlink()
+
+
 init_database()
 
 
@@ -126,6 +134,12 @@ app.add_middleware(
 
 
 def get_output_dir() -> Path:
+    if CURRENT_OUTPUT_DIR is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Output folder is not selected",
+        )
+
     CURRENT_OUTPUT_DIR.mkdir(
         parents=True,
         exist_ok=True,
@@ -171,10 +185,15 @@ def health_check() -> dict[str, str]:
     "/api/settings/output-folder"
 )
 def get_output_folder() -> dict:
-    output_dir = get_output_dir()
+    if CURRENT_OUTPUT_DIR is None:
+        return {
+            "selected": False,
+            "path": "",
+        }
 
     return {
-        "path": str(output_dir),
+        "selected": True,
+        "path": str(CURRENT_OUTPUT_DIR),
     }
 
 
@@ -191,13 +210,20 @@ def select_output_folder() -> dict:
         True,
     )
 
+    if CURRENT_OUTPUT_DIR is not None:
+        initial_dir = str(
+            CURRENT_OUTPUT_DIR
+        )
+    else:
+        initial_dir = str(
+            Path.home()
+        )
+
     try:
         selected_folder = (
             filedialog.askdirectory(
                 title="Choose output folder",
-                initialdir=str(
-                    get_output_dir()
-                ),
+                initialdir=initial_dir,
             )
         )
     finally:
@@ -205,10 +231,14 @@ def select_output_folder() -> dict:
 
     if not selected_folder:
         return {
-            "selected": False,
-            "path": str(
-                get_output_dir()
-            ),
+            "selected":
+                CURRENT_OUTPUT_DIR
+                is not None,
+            "path":
+                str(CURRENT_OUTPUT_DIR)
+                if CURRENT_OUTPUT_DIR
+                is not None
+                else "",
         }
 
     output_dir = Path(
@@ -229,10 +259,32 @@ def select_output_folder() -> dict:
     }
 
 
+@app.post(
+    "/api/settings/output-folder/clear"
+)
+def clear_output_folder() -> dict:
+    global CURRENT_OUTPUT_DIR
+
+    CURRENT_OUTPUT_DIR = None
+
+    clear_saved_output_dir()
+
+    return {
+        "selected": False,
+        "path": "",
+    }
+
+
 @app.post("/api/images/upload")
 async def upload_image(
     file: UploadFile,
 ) -> dict:
+    if CURRENT_OUTPUT_DIR is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Output folder is not selected",
+        )
+
     allowed_types = {
         "image/jpeg",
         "image/png",
