@@ -2,7 +2,6 @@ from fastapi.staticfiles import StaticFiles
 from io import BytesIO
 from pathlib import Path
 import json
-import shutil
 import sys
 import tkinter as tk
 from tkinter import filedialog
@@ -42,6 +41,7 @@ app = FastAPI(
     title="PhotoCropAI API",
     version="0.1.0",
 )
+
 
 if getattr(sys, "frozen", False):
     RESOURCE_DIR = Path(sys._MEIPASS)
@@ -103,8 +103,9 @@ def save_output_dir(
     SETTINGS_PATH.write_text(
         json.dumps(
             {
-                "output_folder":
-                    str(output_dir),
+                "output_folder": str(
+                    output_dir
+                ),
             },
             ensure_ascii=False,
             indent=2,
@@ -148,27 +149,52 @@ def get_output_dir() -> Path:
     return CURRENT_OUTPUT_DIR
 
 
+def get_result_path(
+    prefix: str,
+    original_name: str,
+) -> Path:
+    output_dir = get_output_dir()
+
+    original_stem = Path(
+        original_name
+    ).stem
+
+    return (
+        output_dir
+        / f"{prefix}_{original_stem}.jpg"
+    )
+
+
 def save_failed_image(
     file_id: str,
 ) -> Path:
-    image_path = get_working_path(file_id)
-    output_dir = get_output_dir()
-
-    failed_output_path = (
-        output_dir
-        / f"failed_{image_path.name}"
+    image_path = get_working_path(
+        file_id
     )
 
-    shutil.copy2(
-        image_path,
-        failed_output_path,
+    failed_output_path = (
+        get_result_path(
+            "failed",
+            image_path.name,
+        )
+    )
+
+    image = read_image(
+        str(image_path)
+    )
+
+    save_image(
+        image,
+        str(failed_output_path),
     )
 
     save_processing_result(
         file_id=file_id,
         filename=image_path.name,
         status="failed",
-        output_path=str(failed_output_path),
+        output_path=str(
+            failed_output_path
+        ),
     )
 
     return failed_output_path
@@ -193,7 +219,9 @@ def get_output_folder() -> dict:
 
     return {
         "selected": True,
-        "path": str(CURRENT_OUTPUT_DIR),
+        "path": str(
+            CURRENT_OUTPUT_DIR
+        ),
     }
 
 
@@ -423,13 +451,11 @@ def crop_image_endpoint(
             image_path.name
         )
 
-        output_dir = (
-            get_output_dir()
-        )
-
         new_output_path = (
-            output_dir
-            / f"new_{original_name}"
+            get_result_path(
+                "new",
+                original_name,
+            )
         )
 
         save_image(
@@ -491,18 +517,18 @@ def cancel_image(
             file_id
         )
 
-        output_dir = (
-            get_output_dir()
-        )
-
         new_output_path = (
-            output_dir
-            / f"new_{image_path.name}"
+            get_result_path(
+                "new",
+                image_path.name,
+            )
         )
 
         failed_output_path = (
-            output_dir
-            / f"failed_{image_path.name}"
+            get_result_path(
+                "failed",
+                image_path.name,
+            )
         )
 
         if new_output_path.exists():
@@ -512,13 +538,19 @@ def cancel_image(
             failed_output_path.unlink()
 
         cancelled_output_path = (
-            output_dir
-            / f"cancelled_{image_path.name}"
+            get_result_path(
+                "cancelled",
+                image_path.name,
+            )
         )
 
-        shutil.copy2(
-            image_path,
-            cancelled_output_path,
+        image = read_image(
+            str(image_path)
+        )
+
+        save_image(
+            image,
+            str(cancelled_output_path),
         )
 
         save_processing_result(
@@ -568,13 +600,11 @@ def rotate_result(
             file_id
         )
 
-        output_dir = (
-            get_output_dir()
-        )
-
         output_path = (
-            output_dir
-            / f"new_{image_path.name}"
+            get_result_path(
+                "new",
+                image_path.name,
+            )
         )
 
         if not output_path.exists():
@@ -642,8 +672,10 @@ def get_crop_result(
         )
 
         output_path = (
-            get_output_dir()
-            / f"new_{image_path.name}"
+            get_result_path(
+                "new",
+                image_path.name,
+            )
         )
 
         if not output_path.exists():
@@ -670,6 +702,7 @@ FRONTEND_DIST = (
     / "frontend"
     / "dist"
 )
+
 
 if FRONTEND_DIST.exists():
     app.mount(
