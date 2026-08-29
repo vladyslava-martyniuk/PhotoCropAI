@@ -1,15 +1,13 @@
-import sys
 from pathlib import Path
+from tempfile import gettempdir
 from uuid import uuid4
 
 
-if getattr(sys, "frozen", False):
-    BASE_DIR = Path(sys.executable).resolve().parent
-else:
-    BASE_DIR = Path(__file__).resolve().parents[2]
-
-
-WORKING_DIR = BASE_DIR / "data" / "working"
+WORKING_DIR = (
+    Path(gettempdir())
+    / "PhotoCropAI"
+    / "working"
+)
 
 
 def create_working_copy(
